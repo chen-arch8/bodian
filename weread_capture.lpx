@@ -1,6 +1,6 @@
 #!name = 微信读书·凭据捕获(修复版)
 #!desc = 抓取微信读书票据写入 weread_auth_v2,供「微信读书活动任务」的定时任务读取。用法:打开「票据捕获」开关 → 打开微信读书 App 进「我」「翻牌」「限免」页 → 收到「🎉 微信读书凭据已捕获」即完成 → 关闭开关。原插件「微信读书活动任务」的「票据捕获」请保持关闭,避免重复抓取。修复点:原捕获脚本结尾的 export 语句在 Loon 中导致整段脚本无法运行,本版已移除。
-#!author = ZCode(基于 TomCatXue/MyCookieCenter 修复)
+#!author = chen-arch8(基于 TomCatXue/MyCookieCenter 修复)
 #!homepage = https://github.com/chen-arch8/bodian
 #!icon = https://raw.githubusercontent.com/TomCatXue/MyCookieCenter/refs/heads/main/icons/weread.png
 #!loon_version = 3.5.1(983)
