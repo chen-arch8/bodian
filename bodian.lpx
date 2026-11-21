@@ -1,6 +1,6 @@
 #!name=波点音乐签到
 #!desc=版本 2026-11-21.r5 · 每日签到+听歌奖励+惊喜宝箱+免费抽奖+吃饭领金币,支持多账号。首次使用:打开波点音乐App「赚钱(金币)」页面,收到「✅ 获取凭据成功」即完成,然后关掉「抓取凭据」开关(拦截规则随之停用);每天 8/13/19/22 点自动执行,手动运行在 Loon 脚本页右上角 ▶。凭据失效重开抓取开关再打开赚钱页即可自动更新。
-#!author=ZCode
+#!author=chen-arch8
 #!homepage=https://github.com/chen-arch8/bodian
 #!icon=https://raw.githubusercontent.com/chen-arch8/bodian/main/icon.png
 #!loon_version = 3.5.1(983)
