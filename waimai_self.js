@@ -110,10 +110,13 @@ function capture() {
     const uid = lower["x-vayne"], token = lower["x-sivir"], teemo = lower["x-teemo"];
     let accounts = [];
     try { accounts = JSON.parse($.getdata(KEY_XC) || "[]"); } catch (e) {}
+    // 按 userId 去重: 同 uid 只保留最新 token
     const existing = accounts.find(a => a.userId === uid);
-    if (existing && existing.token === token) return $.done({});
-    if (existing) { existing.token = token; existing.teemo = teemo; }
-    else accounts.push({ userId: uid, teemo: teemo, token: token, userName: "账号" + (accounts.length + 1) });
+    if (existing) {
+      existing.token = token; existing.teemo = teemo; existing.capturedAt = Date.now();
+    } else {
+      accounts.push({ userId: uid, teemo: teemo, token: token, userName: "账号" + (accounts.length + 1), capturedAt: Date.now() });
+    }
     $.setdata(JSON.stringify(accounts), KEY_XC);
     $.msg(NAME_XC, `✅ ${existing ? "更新" : "获取"}凭据成功(共 ${accounts.length} 个)`,
       `账号 ${uid} 已保存\n失效时重新打开 App 即可自动更新`);
@@ -160,7 +163,11 @@ function xcCall(methodName, params, account) {
     "methodname": methodName,
   };
   return request("POST", BASE_XC, headers, body).then(r => {
-    try { return JSON.parse(r.body); } catch (e) { return { status: { code: -1 } }; }
+    if (OPT.debug) console.log(`[XC DEBUG] ${methodName} status=${r.status} body=${String(r.body).slice(0, 300)}`);
+    try { return JSON.parse(r.body); } catch (e) {
+      console.log(`[XC PARSE FAIL] ${methodName}: body=${String(r.body).slice(0, 200)}`);
+      return { status: { code: -1, msg: "响应非JSON: " + String(r.body).slice(0, 100) } };
+    }
   });
 }
 
@@ -316,7 +323,26 @@ async function main() {
   const runXc = OPT.xc_task && xcAccounts.length > 0;
   const runWm = OPT.wm_task && wmAccounts.length > 0;
 
-  if (!runXc && !runWm) {
+  // 账号去重: 同 userId 只保留最新
+  const dedup = (accounts) => {
+    const map = {};
+    for (const a of accounts) {
+      if (!map[a.userId] || (a.capturedAt || 0) > (map[a.userId].capturedAt || 0)) map[a.userId] = a;
+    }
+    return Object.values(map).sort((a, b) => (a.capturedAt || 0) - (b.capturedAt || 0));
+  };
+  const dedupXc = dedup(xcAccounts);
+  const dedupWm = dedup(wmAccounts);
+  if (dedupXc.length !== xcAccounts.length) {
+    $.setdata(JSON.stringify(dedupXc), KEY_XC);
+    console.log(`[dedup] 小蚕 ${xcAccounts.length} -> ${dedupXc.length}`);
+  }
+  if (dedupWm.length !== wmAccounts.length) {
+    $.setdata(JSON.stringify(dedupWm), KEY_WM);
+    console.log(`[dedup] 歪麦 ${wmAccounts.length} -> ${dedupWm.length}`);
+  }
+
+  if (!dedupXc.length && !dedupWm.length) {
     if (!xcAccounts.length && !wmAccounts.length) {
       $.msg("外卖霸王餐", "❌ 未获取到凭据",
         "请分别打开小蚕霸王餐和歪麦吧 App 各刷一下\n收到 ✅ 通知后再运行本脚本");
