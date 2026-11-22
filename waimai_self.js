@@ -12,7 +12,8 @@ const KEY_SIGN_WM = "asdf545asdf4545d";
 const BASE_XC = "https://gw.xiaocantech.com/rpc";
 const BASE_WM_V1 = "https://wmapp-api.waimaimingtang.com";
 const BASE_WM_V2 = "https://wmapp-api-v2.waimaimingtang.com";
-const CJS_URL = "https://cdn.jsdelivr.net/gh/Sliverkiss/QuantumultX@main/Utils/CryptoJS.min.js";
+const CJS_URL = "https://raw.githubusercontent.com/chen-arch8/bodian/main/CryptoJS.min.js";
+const CJS_URL_FALLBACK = "https://cdn.jsdelivr.net/gh/Sliverkiss/QuantumultX@main/Utils/CryptoJS.min.js";
 
 let CryptoJS = null;
 
@@ -51,11 +52,18 @@ function request(method, url, headers, body) {
 // ---------- 加载 CryptoJS ----------
 async function loadCryptoJS() {
   if (CryptoJS) return;
-  const r = await request("GET", CJS_URL);
-  if (r.status === 200 && r.body.length > 1000) {
-    try { eval(r.body); CryptoJS = globalThis.CryptoJS || window.CryptoJS; } catch (e) {}
+  // 依次尝试: 自有仓库 → jsdelivr 兜底
+  for (const url of [CJS_URL, CJS_URL_FALLBACK]) {
+    try {
+      const r = await request("GET", url);
+      if (r.status === 200 && r.body.length > 1000) {
+        eval(r.body);
+        CryptoJS = globalThis.CryptoJS || window.CryptoJS;
+        if (CryptoJS) { console.log("[CryptoJS] loaded from", url.slice(0, 60)); return; }
+      }
+    } catch (e) { console.log(`[CryptoJS] ${url.slice(0, 50)} failed: ${e}`); }
   }
-  if (!CryptoJS) throw new Error("CryptoJS 加载失败");
+  throw new Error("CryptoJS 加载失败(所有 CDN 均不可达)");
 }
 
 // ---------- 小蚕协议 ----------
