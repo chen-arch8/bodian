@@ -1,0 +1,27 @@
+#!name = 外卖霸王餐·凭据同步
+#!desc = 捕获小蚕霸王餐和歪麦吧霸王餐凭据并自动同步至呆呆面板环境变量。用法:①开「小蚕捕获」打开小蚕App刷一下→收到✅→关闭 ②开「歪麦捕获」打开歪麦App进「我的」页→收到✅→关闭。面板地址和密钥在参数里填写。抓完凭据后关闭对应开关,定时任务在呆呆面板上运行。
+#!author = chen-arch8
+#!homepage = https://github.com/chen-arch8/bodian
+#!icon = https://raw.githubusercontent.com/chen-arch8/bodian/main/waimai_icon.png
+#!loon_version = 3.5.1(983)
+#!version = 1.0.0
+#!date = 2026-11-22
+#!tag = 外卖霸王餐, Cookie, 凭据捕获, 呆呆面板
+
+[Argument]
+
+xc_capture = switch,false,tag=小蚕·凭据捕获,desc=打开小蚕App刷一下,收到✅后关闭
+wm_capture = switch,false,tag=歪麦·凭据捕获,desc=打开歪麦App进「我的」页,收到✅后关闭
+daidai_url = input,"",tag=呆呆面板地址,desc=例如 http://192.168.101.189:5700
+daidai_key = input,"",tag=呆呆面板AppKey,desc=面板 Open API 的 App Key
+daidai_secret = input,"",tag=呆呆面板AppSecret,desc=面板 Open API 的 App Secret
+
+[Script]
+
+request if ${url} ~= /^https:\/\/gw\.xiaocantech\.com\/rpc/ then script("https://raw.githubusercontent.com/chen-arch8/bodian/main/waimai_ck.js?v=20261122") with enable=${xc_capture}, tag="小蚕·凭据捕获", requires_body=true, img_url="https://raw.githubusercontent.com/chen-arch8/bodian/main/waimai_icon.png"
+
+request if ${url} ~= /^https:\/\/wmapp-api(-v2)?\.waimaimingtang\.com\// then script("https://raw.githubusercontent.com/chen-arch8/bodian/main/waimai_ck.js?v=20261122") with enable=${wm_capture}, tag="歪麦·凭据捕获", requires_body=true, img_url="https://raw.githubusercontent.com/chen-arch8/bodian/main/waimai_icon.png"
+
+[MITM]
+
+hostname = gw.xiaocantech.com, wmapp-api.waimaimingtang.com, wmapp-api-v2.waimaimingtang.com
