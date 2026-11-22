@@ -1,29 +1,29 @@
-#!name = 外卖霸王餐·自研版
-#!desc = 小蚕霸王餐+歪麦吧霸王餐 每日签到/任务/开宝箱,自研脚本(非混淆引擎)。用法:装好后分别打开两个 App 各刷一下(自动捕获凭据,小蚕开「小蚕捕获」开关、歪麦开「歪麦捕获」开关),收到 ✅ 后关闭对应开关,运行「每日任务」。每天 08:37 自动执行。
-#!author = chen-arch8
+#!name = 外卖霸王餐合集(小蚕+歪麦)
+#!desc = 小蚕霸王餐+歪麦吧霸王餐 每日签到/任务/开宝箱。引擎: Sliverkiss(已修复 createCryptoJS 缺失问题)。用法:①开「小蚕捕获」打开小蚕App刷一下→收到✅→关闭 ②开「歪麦捕获」打开歪麦App进「我的」页→收到✅→关闭 ③手动运行「每日任务」。每天 08:37/08:52 自动执行。凭据失效重复①②即可。
+#!author = chen-arch8(引擎: Sliverkiss)
 #!homepage = https://github.com/chen-arch8/bodian
 #!icon = https://raw.githubusercontent.com/chen-arch8/bodian/main/waimai_icon.png
 #!loon_version = 3.5.1(983)
-#!version = 1.1.0
+#!version = 2.0.0
 #!date = 2026-11-22
 #!tag = 外卖霸王餐, 签到
 
 [Argument]
 
-xc_capture = switch,false,tag=小蚕·凭据捕获,desc=抓完就关;凭据失效重开再刷一次 App
-wm_capture = switch,false,tag=歪麦·凭据捕获,desc=抓完就关;凭据失效重开再进一次「我的」页
-xc_task = switch,true,tag=小蚕·每日任务,desc=签到/开宝箱/收集元宝
-wm_task = switch,true,tag=歪麦·每日任务,desc=签到/奖励查询
-debug = switch,false,tag=调试模式,desc=打印详细日志
+xc_capture = switch,false,tag=小蚕·凭据捕获,desc=抓完就关;失效重抓时再打开
+wm_capture = switch,false,tag=歪麦·凭据捕获,desc=抓完就关;失效重抓时再打开
+debug = switch,false,tag=调试模式,desc=打印引擎自带日志
 
 [Script]
 
-request if ${url} ~= /^https:\/\/gw\.xiaocantech\.com\/rpc/ then script("https://raw.githubusercontent.com/chen-arch8/bodian/main/waimai_self.js?v=20261122e") with enable=${xc_capture}, tag="小蚕·凭据捕获", requires_body=true
+response if ${url} ~= /^https:\/\/gw\.xiaocantech\.com\/rpc/ then script("https://raw.githubusercontent.com/chen-arch8/bodian/main/xiaocan_fixed.js?v=20261122f") with enable=${xc_capture}, tag="小蚕·凭据捕获", requires_body=true
 
-request if ${url} ~= /^https:\/\/wmapp-api(-v2)?\.waimaimingtang\.com\// then script("https://raw.githubusercontent.com/chen-arch8/bodian/main/waimai_self.js?v=20261122e") with enable=${wm_capture}, tag="歪麦·凭据捕获", requires_body=true
+request if ${url} ~= /^https:\/\/wmapp-api\.waimaimingtang\.com\/api\/api\/v2\/user\/api_user_info_one/ then script("https://raw.githubusercontent.com/chen-arch8/bodian/main/waimaitang_fixed.js?v=20261122f") with enable=${wm_capture}, tag="歪麦·凭据捕获", requires_body=true
 
-cron "37 8 * * *" then script("https://raw.githubusercontent.com/chen-arch8/bodian/main/waimai_self.js?v=20261122e", {${xc_task}, ${wm_task}, ${debug}}) with tag="外卖霸王餐·每日任务", timeout=120
+cron "37 8 * * *" then script("https://raw.githubusercontent.com/chen-arch8/bodian/main/xiaocan_fixed.js?v=20261122f") with tag="小蚕·每日任务", timeout=600
+
+cron "52 8 * * *" then script("https://raw.githubusercontent.com/chen-arch8/bodian/main/waimaitang_fixed.js?v=20261122f") with tag="歪麦·每日任务", timeout=600
 
 [MITM]
 
-hostname = gw.xiaocantech.com, wmapp-api.waimaimingtang.com, wmapp-api-v2.waimaimingtang.com
+hostname = gw.xiaocantech.com, wmapp-api.waimaimingtang.com
