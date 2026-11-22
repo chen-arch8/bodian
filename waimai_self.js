@@ -169,20 +169,44 @@ async function runXiaocan(account, index) {
   const silkId = parseInt(account.teemo);
   const uid = account.userId;
   try {
-    let r = await xcCall("ActivityTaskMobileService.OpenBox", { silk_id: silkId }, account);
-    log(`  开宝箱: code=${(r.data || {}).code}`);
+    // 任务列表
+    let r = await xcCall("ActivityTaskMobileService.UserTaskV2", { silk_id: silkId, user_id: uid }, account);
+    const sc = (r.status || {}).code;
+    if (sc === 0) log(`  ✓ 连接正常`);
+    else { log(`  ✗ 连接异常: code=${sc} msg=${(r.status || {}).msg || "?"}`); return; }
     await sleep(300);
 
+    // 每日任务
+    r = await xcCall("ActivityTaskMobileService.GetDailyTask", { silk_id: silkId, user_id: uid, city_code: 440112, platform: 3 }, account);
+    if ((r.status || {}).code === 0) {
+      const dt = r.data || {};
+      log(`  📋 每日任务: ${JSON.stringify(dt).slice(0, 120)}`);
+    }
+    await sleep(300);
+
+    // 开宝箱
+    r = await xcCall("ActivityTaskMobileService.OpenBox", { silk_id: silkId }, account);
+    if ((r.status || {}).code === 0) log(`  ✓ 开宝箱: ${JSON.stringify(r.data || {}).slice(0, 100)}`);
+    else log(`  - 开宝箱: code=${(r.status || {}).code} ${(r.status || {}).msg || ""}`);
+    await sleep(300);
+
+    // 签到
     r = await xcCall("VipRightsService.SignInLottery", { silk_id: silkId, user_id: uid }, account);
-    log(`  签到: ${JSON.stringify((r.data || {}).data || {}).slice(0, 80)}`);
+    if ((r.status || {}).code === 0) log(`  ✓ 签到: ${JSON.stringify(r.data || {}).slice(0, 100)}`);
+    else log(`  - 签到: code=${(r.status || {}).code} ${(r.status || {}).msg || ""}`);
     await sleep(300);
 
+    // 收集元宝
     r = await xcCall("ActivityTaskMobileService.CollectPoints", { silk_id: silkId, user_id: uid }, account);
-    log(`  收集元宝: code=${(r.data || {}).code}`);
+    if ((r.status || {}).code === 0) log(`  ✓ 收集元宝完成`);
+    else log(`  - 收集元宝: code=${(r.status || {}).code}`);
     await sleep(300);
 
+    // 余额
     r = await xcCall("AdMobileService.GetUserInfo", { silk_id: silkId }, account);
-    if (r.data && r.data.total_income !== undefined) log(`  💰 余额: ${r.data.total_income}`);
+    if ((r.status || {}).code === 0 && r.data) {
+      log(`  💰 元宝: ${r.data.total_yuanbao_income || r.data.total_income || "?"} | 可兑换: ${r.data.exchangeable_income || "?"}`);
+    }
   } catch (e) { log(`  ✗ 异常: ${e}`); }
 }
 
@@ -246,24 +270,37 @@ async function runWaimai(account, index) {
   log(`\n===== ${NAME_WM} 账号${index} =====`);
   const token = account.token;
   try {
+    // 签到状态
     let r = await wmV2Call("/api/bwc/sign-in/status", {}, token);
     const status = (r.data && r.data.data) || {};
     if (status.isSignedInToday) {
       log(`  ✓ 今日已签到(累计 ${status.cumulativeDays || 0} 天)`);
     } else {
+      log(`  📋 今日未签到,尝试签到...`);
+      // 签到
       r = await wmV2Call("/api/bwc/sign-in/sign", {}, token);
-      const sd = (r.data && r.data.data) || {};
-      if (r.data && r.data.code === 200) log(`  ✓ 签到成功`);
-      else log(`  ✗ 签到: ${(r.data && r.data.msg) || JSON.stringify(r.data).slice(0, 80)}`);
+      const inner = (r.data && typeof r.data === "object") ? r.data : {};
+      if (inner.code === 200) log(`  ✓ 签到成功!`);
+      else log(`  ✗ 签到失败: code=${inner.code} msg=${inner.msg || JSON.stringify(r.data).slice(0, 100)}`);
     }
 
+    // 累计奖励
     r = await wmV2Call("/api/bwc/sign-in/query-cumulative-rewards", {}, token);
-    for (const rw of ((r.data && r.data.data) || [])) {
-      if (rw.status === "RECEIVABLE") log(`  🎁 累计${rw.cumulativeDays}天奖励可领!`);
+    const rewards = (r.data && r.data.data) || [];
+    if (Array.isArray(rewards)) {
+      for (const rw of rewards) {
+        if (rw.status === "RECEIVABLE") log(`  🎁 累计${rw.cumulativeDays}天奖励可领取!`);
+      }
+      if (!rewards.some(rw => rw.status === "RECEIVABLE")) log(`  - 累计奖励: 暂无可领`);
     }
 
+    // 金币汇总
     r = await wmV2Call("/api/bwc/waimaimt-web-bwc/user/task/earning/gold/summary", {}, token);
-    if (r.data && r.data.data) log(`  💰 金币: ${JSON.stringify(r.data.data).slice(0, 100)}`);
+    if (r.data && r.data.data && typeof r.data.data === "object") {
+      log(`  💰 金币: ${JSON.stringify(r.data.data).slice(0, 120)}`);
+    } else if (r.data && r.data.data) {
+      log(`  💰 金币: ${String(r.data.data).slice(0, 120)}`);
+    }
   } catch (e) { log(`  ✗ 异常: ${e}`); }
 }
 
