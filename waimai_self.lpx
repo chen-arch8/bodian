@@ -18,11 +18,11 @@ debug = switch,false,tag=调试模式,desc=打印详细日志
 
 [Script]
 
-request if ${url} ~= /^https:\/\/gw\.xiaocantech\.com\/rpc/ then script("https://raw.githubusercontent.com/chen-arch8/bodian/main/waimai_self.js?v=20261122b") with enable=${xc_capture}, tag="小蚕·凭据捕获", requires_body=true
+request if ${url} ~= /^https:\/\/gw\.xiaocantech\.com\/rpc/ then script("https://raw.githubusercontent.com/chen-arch8/bodian/main/waimai_self.js?v=20261122e") with enable=${xc_capture}, tag="小蚕·凭据捕获", requires_body=true
 
-request if ${url} ~= /^https:\/\/wmapp-api(-v2)?\.waimaimingtang\.com\// then script("https://raw.githubusercontent.com/chen-arch8/bodian/main/waimai_self.js?v=20261122b") with enable=${wm_capture}, tag="歪麦·凭据捕获", requires_body=true
+request if ${url} ~= /^https:\/\/wmapp-api(-v2)?\.waimaimingtang\.com\// then script("https://raw.githubusercontent.com/chen-arch8/bodian/main/waimai_self.js?v=20261122e") with enable=${wm_capture}, tag="歪麦·凭据捕获", requires_body=true
 
-cron "37 8 * * *" then script("https://raw.githubusercontent.com/chen-arch8/bodian/main/waimai_self.js?v=20261122b", {${xc_task}, ${wm_task}, ${debug}}) with tag="外卖霸王餐·每日任务", timeout=120
+cron "37 8 * * *" then script("https://raw.githubusercontent.com/chen-arch8/bodian/main/waimai_self.js?v=20261122e", {${xc_task}, ${wm_task}, ${debug}}) with tag="外卖霸王餐·每日任务", timeout=120
 
 [MITM]
 
