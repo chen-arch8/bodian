@@ -1,0 +1,24 @@
+#!name = 歪麦吧霸王餐
+#!desc = 歪麦吧霸王餐每日任务,脚本引擎来自 Sliverkiss 的 gist(2025-07-07 版,内部为混淆代码)。用法:装好后打开歪麦吧 App 进「我的」页(自动捕获凭据)→ 手动运行「歪麦·每日任务」看日志。每天 08:52 自动执行。⚠️ 注意:你的抓包显示 App 部分接口已迁到加密的 v2(wmapp-api-v2),若旧接口已下线,任务可能仍失败 — 那属于上游脚本失效,需要脚本作者更新。完整免责声明见仓库 DISCLAIMER.md。
+#!author = chen-arch8(脚本引擎: Sliverkiss)
+#!homepage = https://github.com/chen-arch8/bodian
+#!icon = https://raw.githubusercontent.com/chen-arch8/bodian/main/icon.png
+#!loon_version = 3.5.1(983)
+#!version = 1.0.0
+#!date = 2026-11-22
+#!tag = 外卖霸王餐, 签到
+
+[Argument]
+
+capture = switch,true,tag=凭据捕获,desc=抓完可关;凭据失效时重开再进一次「我的」页
+debug = switch,false,tag=调试模式,desc=保留脚本自带日志
+
+[Script]
+
+request if ${url} ~= /^https:\/\/wmapp-api\.waimaimingtang\.com\/api\/api\/v2\/user\/api_user_info_one/ then script("https://gist.githubusercontent.com/Sliverkiss/49a9ffb2169a2becc33bf4fdbf6eb99a/raw/wmbwc.js?v=20261122") with enable=${capture}, tag="歪麦·凭据捕获", requires_body=true
+
+cron "52 8 * * *" then script("https://gist.githubusercontent.com/Sliverkiss/49a9ffb2169a2becc33bf4fdbf6eb99a/raw/wmbwc.js?v=20261122", {${capture}, ${debug}}) with tag="歪麦·每日任务", timeout=600
+
+[MITM]
+
+hostname = wmapp-api.waimaimingtang.com
