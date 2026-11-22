@@ -25,7 +25,11 @@ const $ = {
 };
 
 const ARG = typeof $argument === "object" && $argument ? $argument : {};
-const OPT = { debug: ARG.debug === true || ARG.debug === "true" };
+const OPT = {
+  xc_task: !(ARG.xc_task === false || ARG.xc_task === "false" || ARG.xc_task === "0"),
+  wm_task: !(ARG.wm_task === false || ARG.wm_task === "false" || ARG.wm_task === "0"),
+  debug: ARG.debug === true || ARG.debug === "true",
+};
 let REPORT = "";
 const isCapture = typeof $request !== "undefined" && !!$request;
 
@@ -219,15 +223,37 @@ async function main() {
   const wmAccounts = [];
   try { wmAccounts.push(...JSON.parse($.getdata(KEY_WM) || "[]")); } catch (e) {}
 
-  if (!xcAccounts.length && !wmAccounts.length) {
-    $.msg("外卖霸王餐", "❌ 未获取到凭据",
-      "请分别打开小蚕霸王餐和歪麦吧 App 各刷一下\n收到 ✅ 通知后再运行本脚本");
+  const runXc = OPT.xc_task && xcAccounts.length > 0;
+  const runWm = OPT.wm_task && wmAccounts.length > 0;
+
+  if (!runXc && !runWm) {
+    if (!xcAccounts.length && !wmAccounts.length) {
+      $.msg("外卖霸王餐", "❌ 未获取到凭据",
+        "请分别打开小蚕霸王餐和歪麦吧 App 各刷一下\n收到 ✅ 通知后再运行本脚本");
+    } else {
+      $.msg("外卖霸王餐", "ℹ️ 所有任务开关均已关闭", "请至少开启「小蚕·每日任务」或「歪麦·每日任务」");
+    }
     return false;
   }
 
   log("外卖霸王餐每日任务(自研版)");
-  for (let i = 0; i < xcAccounts.length; i++) { if (i > 0) await sleep(800); await runXiaocan(xcAccounts[i], i + 1); }
-  for (let i = 0; i < wmAccounts.length; i++) { if (i > 0) await sleep(800); await runWaimai(wmAccounts[i], i + 1); }
+  const parts = [];
+  if (runXc) parts.push(`小蚕:${xcAccounts.length}号`);
+  if (runWm) parts.push(`歪麦:${wmAccounts.length}号`);
+  log(`  执行: ${parts.join(" | ")}`);
+
+  if (runXc) {
+    for (let i = 0; i < xcAccounts.length; i++) {
+      if (i > 0) await sleep(800);
+      await runXiaocan(xcAccounts[i], i + 1);
+    }
+  }
+  if (runWm) {
+    for (let i = 0; i < wmAccounts.length; i++) {
+      if (i > 0) await sleep(800);
+      await runWaimai(wmAccounts[i], i + 1);
+    }
+  }
   log("\n全部完成。");
   return true;
 }
