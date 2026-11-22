@@ -1,27 +1,25 @@
-/**
- * 外卖霸王餐 · 小蚕 + 歪麦 每日签到/任务 (Loon 自研协议版)
- * 加密引擎: CryptoJS(CDN 加载,与 Sliverkiss 同源)
- * 协议: 逆向自 2026-11-21/22 真实抓包
- */
-const NAME_XC = "小蚕霸王餐";
-const NAME_WM = "歪麦吧霸王餐";
-const KEY_XC = "xcbwc_data";
-const KEY_WM = "wmbwc_data";
-const KEY_JND = "jnd674751fh6fkgu";
-const KEY_SIGN_WM = "asdf545asdf4545d";
-const BASE_XC = "https://gw.xiaocantech.com/rpc";
-const BASE_WM_V1 = "https://wmapp-api.waimaimingtang.com";
-const BASE_WM_V2 = "https://wmapp-api-v2.waimaimingtang.com";
-const CJS_URL = "https://raw.githubusercontent.com/chen-arch8/bodian/main/CryptoJS.min.js";
-const CJS_URL_FALLBACK = "https://cdn.jsdelivr.net/gh/Sliverkiss/QuantumultX@main/Utils/CryptoJS.min.js";
+// 外卖霸王餐 · 小蚕 + 歪麦 每日任务 (Loon 自研版 v2)
+// CryptoJS 内嵌(无 CDN 依赖),协议逆向自 2026-11-21/22 真实抓包
+//
+// 双模式:
+//   1. http-request 捕获: 自动保存 App 产生的凭据(token)
+//   2. cron 定时: 每日签到/开宝箱/收集元宝/奖励查询
 
-let CryptoJS = null;
+// ========== Crypto shim (Loon 可能无 WebCrypto) ==========
+if (typeof globalThis.crypto === "undefined" || !globalThis.crypto.getRandomValues) {
+  globalThis.crypto = {
+    getRandomValues: function(arr) {
+      for (var i = 0; i < arr.length; i++) arr[i] = Math.floor(Math.random() * 256);
+      return arr;
+    }
+  };
+}
 
-// ---------- 环境封装 ----------
+// ========== 环境封装 ==========
 const $ = {
   getdata(key) { return typeof $persistentStore !== "undefined" ? $persistentStore.read(key) : null; },
   setdata(v, k) { return typeof $persistentStore !== "undefined" ? $persistentStore.write(v, k) : false; },
-  msg(title, sub, body) { if (typeof $notification !== "undefined") $notification.post(title, sub, body); },
+  msg(t, s, b) { if (typeof $notification !== "undefined") $notification.post(t, s, b); },
   done(d) { if (typeof $done === "function") try { $done(d); } catch (e) {} },
 };
 
@@ -31,9 +29,9 @@ const OPT = {
   wm_task: !(ARG.wm_task === false || ARG.wm_task === "false" || ARG.wm_task === "0"),
   debug: ARG.debug === true || ARG.debug === "true",
 };
+
 let REPORT = "";
 const isCapture = typeof $request !== "undefined" && !!$request;
-
 function log(msg) { REPORT += msg + "\n"; console.log(msg); }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -49,28 +47,103 @@ function request(method, url, headers, body) {
   });
 }
 
-// ---------- 加载 CryptoJS ----------
+// ---------- CryptoJS (CDN 多源加载) ----------
+let CryptoJS = null;
+const CJS_URLS = [
+  "https://raw.githubusercontent.com/chen-arch8/bodian/main/CryptoJS.min.js",
+  "https://fastly.jsdelivr.net/gh/Sliverkiss/QuantumultX@main/Utils/CryptoJS.min.js",
+  "https://cdn.jsdelivr.net/gh/Sliverkiss/QuantumultX@main/Utils/CryptoJS.min.js",
+];
 async function loadCryptoJS() {
   if (CryptoJS) return;
-  // 依次尝试: 自有仓库 → jsdelivr 兜底
-  for (const url of [CJS_URL, CJS_URL_FALLBACK]) {
+  for (const url of CJS_URLS) {
     try {
       const r = await request("GET", url);
-      if (r.status === 200 && r.body.length > 1000) {
+      if (r.status === 200 && r.body.length > 5000) {
         eval(r.body);
-        CryptoJS = globalThis.CryptoJS || window.CryptoJS;
-        if (CryptoJS) { console.log("[CryptoJS] loaded from", url.slice(0, 60)); return; }
+        if (typeof createCryptoJS === "function") {
+          CryptoJS = createCryptoJS();
+          if (CryptoJS && CryptoJS.AES) { console.log("[CJS] loaded:", url.slice(0, 60)); return; }
+        }
+        if (typeof CryptoJS !== "undefined" && CryptoJS && CryptoJS.AES) {
+          console.log("[CJS] loaded direct:", url.slice(0, 60)); return;
+        }
       }
-    } catch (e) { console.log(`[CryptoJS] ${url.slice(0, 50)} failed: ${e}`); }
+    } catch (e) { console.log(`[CJS] ${url.slice(0, 50)} err: ${e.message || e}`); }
   }
-  throw new Error("CryptoJS 加载失败(所有 CDN 均不可达)");
+  throw new Error("CryptoJS 加载失败(所有源均不可达,请检查 Loon 代理设置)");
 }
 
-// ---------- 小蚕协议 ----------
+// ---------- Base64 ----------
+function b64Encode(bytes) {
+  const b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  let r = "";
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b = [bytes[i], bytes[i+1] || 0, bytes[i+2] || 0];
+    r += b64[(b[0] >> 2) & 63] + b64[((b[0] & 3) << 4) | ((b[1] >> 4) & 15)] +
+         (i+1 < bytes.length ? b64[((b[1] & 15) << 2) | ((b[2] >> 6) & 3)] : "=") +
+         (i+2 < bytes.length ? b64[b[2] & 63] : "=");
+  }
+  return r;
+}
+function b64Decode(s) {
+  const b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const bytes = []; let bits = 0, acc = 0;
+  for (const c of s) {
+    if (c === "=") break;
+    const v = b64.indexOf(c); if (v < 0) continue;
+    acc = (acc << 6) | v; bits += 6;
+    if (bits >= 8) { bytes.push((acc >> (bits - 8)) & 0xff); bits -= 8; }
+  }
+  return bytes;
+}
+
+// ---------- 捕获模式 ----------
+function capture() {
+  const url = $request.url || "";
+  const hdrs = $request.headers || {};
+  const lower = {};
+  for (const k in hdrs) lower[k.toLowerCase()] = hdrs[k];
+
+  // 小蚕凭据捕获
+  if (url.includes("gw.xiaocantech.com") && lower["x-vayne"] && lower["x-sivir"] && lower["x-teemo"]) {
+    const uid = lower["x-vayne"], token = lower["x-sivir"], teemo = lower["x-teemo"];
+    let accounts = [];
+    try { accounts = JSON.parse($.getdata(KEY_XC) || "[]"); } catch (e) {}
+    const existing = accounts.find(a => a.userId === uid);
+    if (existing && existing.token === token) return $.done({});
+    if (existing) { existing.token = token; existing.teemo = teemo; }
+    else accounts.push({ userId: uid, teemo: teemo, token: token, userName: "账号" + (accounts.length + 1) });
+    $.setdata(JSON.stringify(accounts), KEY_XC);
+    $.msg(NAME_XC, `✅ ${existing ? "更新" : "获取"}凭据成功(共 ${accounts.length} 个)`,
+      `账号 ${uid} 已保存\n失效时重新打开 App 即可自动更新`);
+    return $.done({});
+  }
+
+  // 歪麦凭据捕获 (从请求头取 token)
+  if (url.includes("waimaimingtang.com") && lower["token"]) {
+    const token = lower["token"];
+    let accounts = [];
+    try { accounts = JSON.parse($.getdata(KEY_WM) || "[]"); } catch (e) {}
+    const existing = accounts.find(a => a.token === token);
+    if (existing) return $.done({});
+    accounts.push({ userId: "user_" + Date.now(), token: token, userName: "歪麦账号" + (accounts.length + 1) });
+    $.setdata(JSON.stringify(accounts), KEY_WM);
+    $.msg(NAME_WM, `✅ 凭据获取成功(共 ${accounts.length} 个)`,
+      `token 已保存\n失效时重新打开 App 即可自动更新`);
+    return $.done({});
+  }
+
+  $.done({});
+}
+
+// ========== 小蚕 ==========
+const NAME_XC = "小蚕霸王餐";
+const KEY_XC = "xcbwc_data";
+const BASE_XC = "https://gw.xiaocantech.com/rpc";
+
 function xcCall(methodName, params, account) {
-  const body = (typeof CryptoJS !== "undefined" && CryptoJS.enc)
-    ? CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(JSON.stringify(params)))
-    : btoa(unescape(encodeURIComponent(JSON.stringify(params))));
+  const body = CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(JSON.stringify(params)));
   const headers = {
     "Content-Type": "application/json",
     "servername": "SilkwormAd",
@@ -91,93 +164,6 @@ function xcCall(methodName, params, account) {
   });
 }
 
-// ---------- 歪麦协议 ----------
-function wmEncrypt(params, sessionKey) {
-  const pt = JSON.stringify(params, undefined);
-  const key = CryptoJS.enc.Utf8.parse(sessionKey);
-  return CryptoJS.AES.encrypt(pt, key, { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 }).toString();
-}
-
-function wmDecrypt(b64Data, sessionKey) {
-  const key = CryptoJS.enc.Utf8.parse(sessionKey);
-  const dec = CryptoJS.AES.decrypt(b64Data, key, { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 });
-  return dec.toString(CryptoJS.enc.Utf8);
-}
-
-function wmSign(sessionKey) {
-  const ts = String(Date.now());
-  let nc = "";
-  for (let i = 0; i < 16; i++) nc += Math.floor(Math.random() * 10);
-  const key = CryptoJS.enc.Utf8.parse(KEY_SIGN_WM);
-  const sign = CryptoJS.AES.encrypt(ts + nc, key, { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 }).toString();
-  return { ts, nc, sign };
-}
-
-function wmV2Call(path, params, token) {
-  const sessionKey = (() => { const a = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"; let s = ""; for (let i = 0; i < 32; i++) s += a[Math.floor(Math.random() * a.length)]; return s; })();
-  const { ts, nc, sign } = wmSign(sessionKey);
-  const body = wmEncrypt(params, sessionKey);
-  const headers = {
-    "Content-Type": "application/json",
-    "application": "bwyc-app",
-    "token": token,
-    "nonce": nc,
-    "timestamp": ts,
-    "sign": sign,
-    "appversion": "1.1.175",
-    "Waimai-Accept-Encoding": "gzip",
-    "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
-    "origin": "https://wmh5.waimaimingtang.com",
-    "referer": "https://wmh5.waimaimingtang.com/",
-  };
-  return request("POST", BASE_WM_V2 + path, headers, body).then(r => {
-    if (!r.body) return { code: -1, msg: "无响应" };
-    try {
-      const res = JSON.parse(r.body);
-      if (typeof res.data === "string" && res.data.length > 4 && !res.data.includes("https://")) {
-        try { res.data = JSON.parse(wmDecrypt(res.data, sessionKey)); } catch (e) {}
-      }
-      return res;
-    } catch (e) { return { code: -1, msg: "解析失败" }; }
-  });
-}
-
-// ---------- 捕获模式 ----------
-function capture() {
-  const url = $request.url || "";
-  const hdrs = $request.headers || {};
-  const lower = {};
-  for (const k in hdrs) lower[k.toLowerCase()] = hdrs[k];
-
-  if (url.includes("gw.xiaocantech.com") && lower["x-vayne"] && lower["x-sivir"] && lower["x-teemo"]) {
-    const uid = lower["x-vayne"], token = lower["x-sivir"], teemo = lower["x-teemo"];
-    let accounts = [];
-    try { accounts = JSON.parse($.getdata(KEY_XC) || "[]"); } catch (e) {}
-    const existing = accounts.find(a => a.userId === uid);
-    if (existing && existing.token === token) return $.done({});
-    if (existing) { existing.token = token; existing.teemo = teemo; }
-    else accounts.push({ userId: uid, teemo: teemo, token: token, userName: "账号" + (accounts.length + 1) });
-    $.setdata(JSON.stringify(accounts), KEY_XC);
-    $.msg(NAME_XC, `✅ ${existing ? "更新" : "获取"}凭据成功(共 ${accounts.length} 个)`, `账号 ${uid} 已保存\n失效时重新打开 App 即可自动更新`);
-    return $.done({});
-  }
-
-  if (url.includes("waimaimingtang.com") && lower["token"]) {
-    const token = lower["token"];
-    let accounts = [];
-    try { accounts = JSON.parse($.getdata(KEY_WM) || "[]"); } catch (e) {}
-    const existing = accounts.find(a => a.token === token);
-    if (existing) return $.done({});
-    accounts.push({ userId: "user_" + Date.now(), token: token, userName: "歪麦账号" + (accounts.length + 1) });
-    $.setdata(JSON.stringify(accounts), KEY_WM);
-    $.msg(NAME_WM, `✅ 凭据获取成功(共 ${accounts.length} 个)`, `token 已保存\n失效时重新打开 App 即可自动更新`);
-    return $.done({});
-  }
-
-  $.done({});
-}
-
-// ---------- 小蚕任务 ----------
 async function runXiaocan(account, index) {
   log(`\n===== ${NAME_XC} 账号${index} =====`);
   const silkId = parseInt(account.teemo);
@@ -196,11 +182,66 @@ async function runXiaocan(account, index) {
     await sleep(300);
 
     r = await xcCall("AdMobileService.GetUserInfo", { silk_id: silkId }, account);
-    if (r.data && res.data.total_income !== undefined) log(`  💰 余额: ${r.data.total_income}`);
+    if (r.data && r.data.total_income !== undefined) log(`  💰 余额: ${r.data.total_income}`);
   } catch (e) { log(`  ✗ 异常: ${e}`); }
 }
 
-// ---------- 歪麦任务 ----------
+// ========== 歪麦 ==========
+const NAME_WM = "歪麦吧霸王餐";
+const KEY_WM = "wmbwc_data";
+const KEY_JND = "jnd674751fh6fkgu";
+const KEY_SIGN_WM = "asdf545asdf4545d";
+const BASE_WM_V1 = "https://wmapp-api.waimaimingtang.com";
+const BASE_WM_V2 = "https://wmapp-api-v2.waimaimingtang.com";
+
+function wmEncrypt(params, sessionKey) {
+  const pt = JSON.stringify(params);
+  const key = CryptoJS.enc.Utf8.parse(sessionKey);
+  return CryptoJS.AES.encrypt(pt, key, { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 }).toString();
+}
+
+function wmDecrypt(b64Data, sessionKey) {
+  const key = CryptoJS.enc.Utf8.parse(sessionKey);
+  return CryptoJS.AES.decrypt(b64Data, key, { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 }).toString(CryptoJS.enc.Utf8);
+}
+
+function wmSignHeader(sessionKey, token) {
+  const ts = String(Date.now());
+  let nc = "";
+  for (let i = 0; i < 16; i++) nc += Math.floor(Math.random() * 10);
+  const key = CryptoJS.enc.Utf8.parse(KEY_SIGN_WM);
+  const sign = CryptoJS.AES.encrypt(ts + nc, key, { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 }).toString();
+  return { ts, nc, sign, headers: {
+    "Content-Type": "application/json",
+    "application": "bwyc-app",
+    "token": token,
+    "nonce": nc,
+    "timestamp": ts,
+    "sign": sign,
+    "appversion": "1.1.175",
+    "Waimai-Accept-Encoding": "gzip",
+    "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
+    "origin": "https://wmh5.waimaimingtang.com",
+    "referer": "https://wmh5.waimaimingtang.com/",
+  } };
+}
+
+function wmV2Call(path, params, token) {
+  const sessionKey = (() => { const a = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"; let s = ""; for (let i = 0; i < 32; i++) s += a[Math.floor(Math.random() * a.length)]; return s; })();
+  const { headers } = wmSignHeader(sessionKey, token);
+  const body = wmEncrypt(params, sessionKey);
+  return request("POST", BASE_WM_V2 + path, headers, body).then(r => {
+    if (!r.body) return { code: -1, msg: "无响应" };
+    try {
+      const res = JSON.parse(r.body);
+      if (typeof res.data === "string" && res.data.length > 4 && !res.data.includes("https://")) {
+        try { res.data = JSON.parse(wmDecrypt(res.data, sessionKey)); } catch (e) {}
+      }
+      return res;
+    } catch (e) { return { code: -1, msg: "解析失败" }; }
+  });
+}
+
 async function runWaimai(account, index) {
   log(`\n===== ${NAME_WM} 账号${index} =====`);
   const token = account.token;
@@ -211,6 +252,7 @@ async function runWaimai(account, index) {
       log(`  ✓ 今日已签到(累计 ${status.cumulativeDays || 0} 天)`);
     } else {
       r = await wmV2Call("/api/bwc/sign-in/sign", {}, token);
+      const sd = (r.data && r.data.data) || {};
       if (r.data && r.data.code === 200) log(`  ✓ 签到成功`);
       else log(`  ✗ 签到: ${(r.data && r.data.msg) || JSON.stringify(r.data).slice(0, 80)}`);
     }
@@ -219,6 +261,9 @@ async function runWaimai(account, index) {
     for (const rw of ((r.data && r.data.data) || [])) {
       if (rw.status === "RECEIVABLE") log(`  🎁 累计${rw.cumulativeDays}天奖励可领!`);
     }
+
+    r = await wmV2Call("/api/bwc/waimaimt-web-bwc/user/task/earning/gold/summary", {}, token);
+    if (r.data && r.data.data) log(`  💰 金币: ${JSON.stringify(r.data.data).slice(0, 100)}`);
   } catch (e) { log(`  ✗ 异常: ${e}`); }
 }
 
@@ -239,7 +284,7 @@ async function main() {
       $.msg("外卖霸王餐", "❌ 未获取到凭据",
         "请分别打开小蚕霸王餐和歪麦吧 App 各刷一下\n收到 ✅ 通知后再运行本脚本");
     } else {
-      $.msg("外卖霸王餐", "ℹ️ 所有任务开关均已关闭", "请至少开启「小蚕·每日任务」或「歪麦·每日任务」");
+      $.msg("外卖霸王餐", "ℹ️ 任务开关均已关闭", "请至少开启一个「每日任务」开关");
     }
     return false;
   }
@@ -251,22 +296,14 @@ async function main() {
   log(`  执行: ${parts.join(" | ")}`);
 
   if (runXc) {
-    for (let i = 0; i < xcAccounts.length; i++) {
-      if (i > 0) await sleep(800);
-      await runXiaocan(xcAccounts[i], i + 1);
-    }
+    for (let i = 0; i < xcAccounts.length; i++) { if (i > 0) await sleep(800); await runXiaocan(xcAccounts[i], i + 1); }
   }
   if (runWm) {
-    for (let i = 0; i < wmAccounts.length; i++) {
-      if (i > 0) await sleep(800);
-      await runWaimai(wmAccounts[i], i + 1);
-    }
+    for (let i = 0; i < wmAccounts.length; i++) { if (i > 0) await sleep(800); await runWaimai(wmAccounts[i], i + 1); }
   }
   log("\n全部完成。");
   return true;
 }
-
-function btoa(s) { return typeof btoa !== "undefined" ? btoa(s) : Buffer.from(s).toString("base64"); }
 
 // ---------- 入口 ----------
 (async () => {
