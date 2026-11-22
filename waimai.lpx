@@ -1,0 +1,29 @@
+#!name = 外卖霸王餐合集(小蚕+歪麦)
+#!desc = 每日任务:小蚕霸王餐(签到/元宝乐园/看广告)+ 歪麦吧霸王餐,脚本引擎来自 Sliverkiss 的 gist(内部为混淆代码,由其自行维护)。用法:装好后分别打开两个 App 各刷一下(自动捕获凭据:小蚕随便刷、歪麦进「我的」页)→ 手动运行对应「每日任务」看日志。每天 08:37(小蚕)/ 08:52(歪麦)自动执行。⚠️ 引擎为第三方混淆代码未审计;歪麦 App 部分接口已迁加密 v2,若任务报错属上游失效;完整免责声明见仓库 DISCLAIMER.md。
+#!author = chen-arch8(脚本引擎: Sliverkiss)
+#!homepage = https://github.com/chen-arch8/bodian
+#!icon = https://raw.githubusercontent.com/chen-arch8/bodian/main/icon.png
+#!loon_version = 3.5.1(983)
+#!version = 1.1.0
+#!date = 2026-11-22
+#!tag = 外卖霸王餐, 签到
+
+[Argument]
+
+xc_capture = switch,true,tag=小蚕·凭据捕获,desc=抓完可关;凭据失效时重开再刷一次 App
+wm_capture = switch,true,tag=歪麦·凭据捕获,desc=抓完可关;凭据失效时重开再进一次「我的」页
+debug = switch,false,tag=调试模式,desc=保留脚本自带日志
+
+[Script]
+
+response if ${url} ~= /^https:\/\/gw\.xiaocantech\.com\/rpc/ then script("https://gist.githubusercontent.com/Sliverkiss/27c601d97a3f8960b212e5cac5b6c470/raw/xcbwc.js?v=20261122") with enable=${xc_capture}, tag="小蚕·凭据捕获", requires_body=true
+
+request if ${url} ~= /^https:\/\/wmapp-api\.waimaimingtang\.com\/api\/api\/v2\/user\/api_user_info_one/ then script("https://gist.githubusercontent.com/Sliverkiss/49a9ffb2169a2becc33bf4fdbf6eb99a/raw/wmbwc.js?v=20261122") with enable=${wm_capture}, tag="歪麦·凭据捕获", requires_body=true
+
+cron "37 8 * * *" then script("https://gist.githubusercontent.com/Sliverkiss/27c601d97a3f8960b212e5cac5b6c470/raw/xcbwc.js?v=20261122") with tag="小蚕·每日任务", timeout=600
+
+cron "52 8 * * *" then script("https://gist.githubusercontent.com/Sliverkiss/49a9ffb2169a2becc33bf4fdbf6eb99a/raw/wmbwc.js?v=20261122") with tag="歪麦·每日任务", timeout=600
+
+[MITM]
+
+hostname = gw.xiaocantech.com, wmapp-api.waimaimingtang.com
