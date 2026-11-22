@@ -12,7 +12,7 @@
 
 xc_capture = switch,false,tag=小蚕·凭据捕获,desc=打开小蚕App刷一下,收到✅后关闭
 wm_capture = switch,false,tag=歪麦·凭据捕获,desc=打开歪麦App进「我的」页,收到✅后关闭
-daidai_url = input,"",tag=呆呆面板地址,desc=例如 http://192.168.101.189:5700
+daidai_url = input,"",tag=呆呆面板地址,desc=例如 http://192.168.x.x:5700
 daidai_key = input,"",tag=呆呆面板AppKey,desc=面板 Open API 的 App Key
 daidai_secret = input,"",tag=呆呆面板AppSecret,desc=面板 Open API 的 App Secret
 
