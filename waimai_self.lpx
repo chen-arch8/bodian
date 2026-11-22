@@ -1,0 +1,25 @@
+#!name = 外卖霸王餐·自研版
+#!desc = 小蚕霸王餐+歪麦吧霸王餐 每日签到/任务/开宝箱,自研脚本(非混淆引擎)。用法:装好后分别打开两个 App 各刷一下(自动捕获凭据),收到 ✅ 通知后运行「每日任务」。每天 08:37(小蚕)/ 08:52(歪麦)自动执行。凭据失效重开 App 即可自动更新。
+#!author = chen-arch8
+#!homepage = https://github.com/chen-arch8/bodian
+#!icon = https://raw.githubusercontent.com/chen-arch8/bodian/main/icon.png
+#!loon_version = 3.5.1(983)
+#!version = 1.0.0
+#!date = 2026-11-22
+#!tag = 外卖霸王餐, 签到
+
+[Argument]
+
+debug = switch,false,tag=调试模式,desc=打印详细日志
+
+[Script]
+
+request if ${url} ~= /^https:\/\/gw\.xiaocantech\.com\/rpc/ then script("https://raw.githubusercontent.com/chen-arch8/bodian/main/waimai_self.js?v=20261122a") with enable=true, tag="小蚕·凭据捕获", requires_body=true
+
+request if ${url} ~= /^https:\/\/wmapp-api(-v2)?\.waimaimingtang\.com\// then script("https://raw.githubusercontent.com/chen-arch8/bodian/main/waimai_self.js?v=20261122a") with enable=true, tag="歪麦·凭据捕获", requires_body=true
+
+cron "37 8 * * *" then script("https://raw.githubusercontent.com/chen-arch8/bodian/main/waimai_self.js?v=20261122a", {${debug}}) with tag="外卖霸王餐·每日任务", timeout=120
+
+[MITM]
+
+hostname = gw.xiaocantech.com, wmapp-api.waimaimingtang.com, wmapp-api-v2.waimaimingtang.com
